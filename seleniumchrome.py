@@ -1,8 +1,9 @@
-import os
-import requests
-from urllib import request
+import os, requests, zipfile, time
 from bs4 import BeautifulSoup
-import zipfile
+
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 
 
 class ChromeDownloader:
@@ -140,7 +141,88 @@ class ChromeExtractor:
             with zipfile.ZipFile(chrome_zip_path, "r") as zip:
                 zip.extractall(self._workspace_path)
 
+        # chmod
+        os.chmod(self.get_chromedriver_path(), 0o777)
+        os.chmod(self.get_chrome_path(), 0o777)
+
         return True
+
+
+class SeleniumChromeWrapper:
+
+    def _prepare(self, download_dir: str, workspace_dir: str) -> tuple[str, str]:
+        dl = ChromeDownloader(download_dir)
+
+        if not dl.download():
+            raise Exception("couldn't download files")
+
+        ex = ChromeExtractor(workspace_dir)
+        if not ex.extract(dl.get_chromedriver_zip_path(), dl.get_chrome_zip_path()):
+            raise Exception("could'n extract files")
+
+        return ex.get_chromedriver_path(), ex.get_chrome_path()
+
+    def __init__(self, download_dir: str, workspace_dir: str) -> None:
+
+        chromedriver_dir, chrome_dir = self._prepare(download_dir, workspace_dir)
+
+        self._download_path = download_dir
+        self._chromedriver_path = os.path.join(chromedriver_dir, "chromedriver")
+        self._chrome_path = os.path.join(chrome_dir, "chrome")
+
+        # chmod
+        os.chmod(self._chromedriver_path, 0o777)
+        os.chmod(self._chrome_path, 0o777)
+
+    def get_driver(self) -> webdriver.Chrome:
+
+        # options
+        chrome_options = Options()
+        chrome_options.binary_location = self._chrome_path
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_experimental_option(
+            "prefs",
+            {
+                "profile.default_content_settings.popups": 0,
+                "download.default_directory": os.path.abspath(self._download_path),
+                "safebrowsing.enabled": True,
+            },
+        )
+
+        # webdriver
+        service = Service(executable_path=self._chromedriver_path)
+
+        # instance
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        return driver
+
+    def _get_filename_from_url(self, url: str) -> str:
+        filename = url.split("/")[-1]
+        return filename
+
+    def download_sync(self, driver: webdriver.Chrome, url) -> str:
+
+        # target path
+        filename = self._get_filename_from_url(url)
+        path = os.path.join(self._download_path, filename)
+
+        if os.path.exists(path):
+            print("file already exists: ", path)
+            return path
+
+        # download
+        driver.get(url)
+        print("start downloading: ", url)
+
+        # check if file exists
+        while not os.path.exists(path):
+            time.sleep(1)
+        time.sleep(1)
+
+        return path
 
 
 def test():
@@ -153,3 +235,16 @@ def test():
 
 
 # test()
+
+
+def test2():
+
+    url = "https://storage.googleapis.com/chrome-for-testing-public/128.0.6613.84/mac-arm64/chromedriver-mac-arm64.zip"
+
+    wrapper = SeleniumChromeWrapper("download", "workspace")
+    driver = wrapper.get_driver()
+    downloaded_path = wrapper.download_sync(driver, url)
+    print("finished: ", downloaded_path)
+
+
+# test2()

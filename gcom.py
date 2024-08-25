@@ -2,10 +2,7 @@ import os, requests, time, json
 from urllib.parse import urlencode
 from datetime import datetime, timezone, timedelta
 from selenium import webdriver
-
-
-class JPortalLogin:
-    pass
+from selenium.webdriver.common.by import By
 
 
 class CSWWrapper:
@@ -75,6 +72,36 @@ def convert_utc_to_jst(utc_date: datetime) -> datetime:
     return dt_jst
 
 
+class JPortalLogin:
+    def __init__(self) -> None:
+        self._login_url = "https://gportal.jaxa.jp/gpr/auth?"
+
+    def login(self, driver: webdriver.Chrome, username: str, password: str) -> bool:
+
+        driver.get(self._login_url)
+
+        # input username
+        user_input = driver.find_element("id", "auth_account")
+        user_input.send_keys(username)
+
+        # input password
+        password_input = driver.find_element("id", "auth_password")
+        password_input.send_keys(password)
+
+        # click button
+        login_button = driver.find_element("id", "auth_login_submit")
+        login_button.click()
+
+        # wait for page transition
+        time.sleep(3)
+
+        if driver.title != "G-PortalTop":
+            return False
+
+        print("title: ", driver.title)
+        return True
+
+
 def test():
     # https://gportal.jaxa.jp/gpr/assets/mng_upload/COMMON/upload/GCOM-C_FAQ_datasetID_jp.pdf
     dataset_id = "10002019"  # LST
@@ -91,3 +118,20 @@ def test():
 
 
 # test()
+
+from seleniumchrome import SeleniumChromeWrapper
+
+
+def test2():
+
+    selenium = SeleniumChromeWrapper("download", "workspace")
+    driver = selenium.get_driver()
+
+    login = JPortalLogin()
+
+    username = "*****"
+    password = "*****"
+    print(login.login(driver, username, password))
+
+
+# test2()

@@ -1,4 +1,5 @@
 import os, requests, json
+from datetime import datetime
 from dataclasses import dataclass, asdict
 from bs4 import BeautifulSoup, element
 
@@ -40,6 +41,7 @@ class AmedasStationJson:
                     key in obj
                     # AmedasStation properties
                     for key in [
+                        "as_type",
                         "prec_no",
                         "block_no",
                         "is_valid",
@@ -201,10 +203,39 @@ class AmedasStationInfo:
 
 @dataclass
 class AmedasDaily:
-    pass
+    dt: datetime
+    table_headings: list[str]
+    table_lines: list[list[str]]
+
+
+class AmedasDailyJson:
+
+    @staticmethod
+    def save_as_json(data: AmedasDaily, filename):
+        def custom_encoder(obj):
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
+        dict_data = asdict(data)
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(dict_data, f, default=custom_encoder, ensure_ascii=False, indent=4)
+
+    @staticmethod
+    def load_from_json(filename):
+        def custom_decoder(dict_obj):
+            if "dt" in dict_obj:
+                dict_obj["dt"] = datetime.fromisoformat(dict_obj["dt"])
+            return dict_obj
+
+        with open(filename, "r", encoding="utf-8") as f:
+            data = json.load(f, object_hook=custom_decoder)
+        return AmedasDaily(**data)
 
 
 class AmedasDailyInfo:
+    def __init__(self, workspace: str) -> None:
+        self._workspace = workspace
 
     def _get_table_headings(self, headings: list[element.Tag]) -> list[str]:
         # check heading level
@@ -262,7 +293,15 @@ class AmedasDailyInfo:
         # print(table_headings)
         return table_headings
 
-    def get_amedas_daily(self, as_type: str, prec_no: int, block_no: int, year: int, month: int, day: int):
+    def _get_item_line(self, line: element.Tag) -> list[str]:
+
+        result: list[str] = []
+        for item in line.find_all("td"):
+            result.append(item.text)
+
+        return result
+
+    def _download_amedas_daily(self, as_type: str, prec_no: int, block_no: int, year: int, month: int, day: int):
 
         url = f"https://www.data.jma.go.jp/obd/stats/etrn/view/10min_{as_type}1.php?prec_no={prec_no}&block_no={block_no}&year={year}&month={month}&day={day}&view="
 
@@ -287,9 +326,29 @@ class AmedasDailyInfo:
             else:
                 lines.append(tr)
 
-        self._table_headings = self._get_table_headings(headings)
+        table_headings = self._get_table_headings(headings)
+        # print(table_headings)
 
-        print(self._table_headings)
+        table_lines: list[list[str]] = []
+        for line in lines:
+            table_line = self._get_item_line(line)
+            table_lines.append(table_line)
+            # print(table_line)
+
+        dt = datetime(year, month, day)
+
+        return AmedasDaily(dt, table_headings, table_lines)
+
+    def get_amedas_daily(self, as_type: str, prec_no: int, block_no: int, year: int, month: int, day: int) -> AmedasDaily:
+
+        file_path = os.path.join(self._workspace, f"{prec_no}_{block_no}_{year}_{month}_{day}.json")
+
+        if os.path.exists(file_path):
+            return AmedasDailyJson.load_from_json(file_path)
+
+        daily = self._download_amedas_daily(as_type, prec_no, block_no, year, month, day)
+        AmedasDailyJson.save_as_json(daily, file_path)
+        return daily
 
 
 def test():
@@ -299,9 +358,11 @@ def test():
     oobu = amedas.get_amedas_station("愛知県", "大府")
     nagoya = amedas.get_amedas_station("愛知県", "名古屋")
 
-    daily = AmedasDailyInfo()
-    daily.get_amedas_daily(oobu.as_type, oobu.prec_no, oobu.block_no, 2024, 8, 1)
-    daily.get_amedas_daily(nagoya.as_type, nagoya.prec_no, nagoya.block_no, 2024, 8, 1)
+    daily = AmedasDailyInfo("workspace")
+    oobu_daily = daily.get_amedas_daily(oobu.as_type, oobu.prec_no, oobu.block_no, 2024, 8, 1)
+    # nagoya_daily = daily.get_amedas_daily(nagoya.as_type, nagoya.prec_no, nagoya.block_no, 2024, 8, 1)
+
+    print(oobu_daily)
 
 
 test()

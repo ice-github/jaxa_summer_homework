@@ -64,14 +64,6 @@ class CSWWrapper:
         return h5_urls
 
 
-def convert_utc_to_jst(utc_date: datetime) -> datetime:
-
-    dt_utc = dt_utc.replace(tzinfo=timezone.utc)
-    dt_jst = dt_utc.astimezone(timezone(timedelta(hours=9)))
-
-    return dt_jst
-
-
 class JPortalLogin:
     def __init__(self) -> None:
         self._login_url = "https://gportal.jaxa.jp/gpr/auth?"
@@ -122,16 +114,36 @@ def test():
 from seleniumchrome import SeleniumChromeWrapper
 
 
+class GcomDownloader:
+
+    def __init__(
+        self,
+        download_dir: str,
+        workspace_dir: str,
+        username: str,
+        password: str,
+    ) -> None:
+        self._selenium = SeleniumChromeWrapper(download_dir, workspace_dir)
+        self._driver = self._selenium.get_driver()
+
+        login = JPortalLogin()
+        if not login.login(self._driver, username, password):
+            print("failed to login to jportal")
+
+    def get_downloaded_file_paths(self, urls: list[str]) -> list[str]:
+
+        file_paths: list[str] = []
+        for url in url:
+            file_paths.append(self._selenium.download_sync(self._driver, url))
+
+        return file_paths
+
+
 def test2():
-
-    selenium = SeleniumChromeWrapper("download", "workspace")
-    driver = selenium.get_driver()
-
-    login = JPortalLogin()
 
     username = "*****"
     password = "*****"
-    print(login.login(driver, username, password))
+    downloader = GcomDownloader("download", "workspace", username, password)
 
 
 # test2()

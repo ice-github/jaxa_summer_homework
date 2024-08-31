@@ -54,6 +54,7 @@ class QGisWrapper:
         self._point_and_label_layer: QgsVectorLayer = None
         self._number_of_point = 0
         self._shp_layers: list[QgsVectorLayer] = []
+        self._geotiff_layers: list[QgsRasterLayer] = []
 
     def __del__(self) -> None:
         self._qgs.exitQgis()
@@ -73,9 +74,6 @@ class QGisWrapper:
         self._point_and_label_layer.triggerRepaint()
         return provider.addFeature(feature)
 
-    def add_text(self, point: QgsPointXY, text: str) -> bool:
-        pass
-
     def add_shp(self, shp_path: str) -> bool:
 
         layer_number = len(self._shp_layers)
@@ -91,7 +89,18 @@ class QGisWrapper:
         return True
 
     def add_geotiff(self, tif_path: str) -> int:  # output layer number
-        pass
+
+        layer_number = len(self._geotiff_layers)
+        layer = QgsRasterLayer(tif_path, "Geotiff Layer " + str(layer_number))
+
+        if not layer.isValid():
+            print("Layer failed to load!")
+            return -1
+
+        # add map layer
+        self._project.addMapLayer(layer)
+        self._geotiff_layers.append(layer)
+        return layer_number
 
     def get_geotiff_layer_value(self, point: QgsPointXY, layer_index: int) -> float:
         pass
@@ -116,6 +125,9 @@ class QGisWrapper:
 
         if self._point_and_label_layer:
             render_layers.append(self._point_and_label_layer)
+
+        for geotiff_layer in self._geotiff_layers:
+            render_layers.append(geotiff_layer)
 
         for shp_layer in self._shp_layers:
             render_layers.append(shp_layer)
@@ -151,10 +163,12 @@ def test():
 
     shp_path = "workspace/N03-20240101_23_GML/N03-20240101_23.shp"
     point = QgsPointXY(136.8855, 35.1077)  # minato, nagoya
+    lst_path = "workspace/GC1SG1_20240801A01D_T0529_L2SG_LST_Q_3000.LST.tif"
 
     wrapper = QGisWrapper()
     print(wrapper.add_shp(shp_path))
     print(wrapper.add_point_and_label(point, "minato, nagoya"))
+    print(wrapper.add_geotiff(lst_path))
     print(wrapper.render_to_file("workspace/output.png", 900, 900))
 
 

@@ -1,4 +1,5 @@
 import os, math
+from datetime import datetime, timezone, timedelta
 from osgeo import gdal
 
 
@@ -21,13 +22,36 @@ class GcomHdf5:
 
         return [x_upper_left, y_upper_left, x_lower_right, y_lower_right]
 
+    def _get_utc_start_end_time(self, metadata: dict) -> tuple[datetime, datetime]:
+
+        start_str = metadata["Global_attributes_Image_start_time"]
+        end_str = metadata["Global_attributes_Image_end_time"]
+
+        date_format = "%Y%m%d %H:%M:%S.%f"
+        utc_start = datetime.strptime(start_str, date_format)
+        utc_end = datetime.strptime(end_str, date_format)
+
+        return utc_start, utc_end
+
+    def _convert_utc_to_jst(self, utc_date: datetime) -> datetime:
+
+        dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+        dt_jst = dt_utc.astimezone(timezone(timedelta(hours=9)))
+
+        return dt_jst
+
     def __init__(self, path: str) -> None:
 
         if not os.path.exists(path):
             raise Exception("file not found")
 
         self._dataset: gdal.Dataset = gdal.Open(path)
-        self._rect = self._get_rect(self._dataset.GetMetadata())
+        metadata = self._dataset.GetMetadata()
+        self._rect = self._get_rect(metadata)
+
+        self._utc_start, self._utc_end = self._get_utc_start_end_time(metadata)
+        self._jst_start = self._convert_utc_to_jst(self._utc_start)
+        self._jst_end = self._convert_utc_to_jst(self._utc_end)
 
     def get_sub_image_path(self, sub_key: str, output_geotiff_path: str) -> bool:
 
@@ -67,6 +91,9 @@ class GcomHdf5:
         os.remove("temp.tif")
 
         return True
+
+    def get_jst_start_end(self) -> tuple[datetime, datetime]:
+        return self._jst_start, self._jst_end
 
 
 def test():

@@ -303,7 +303,9 @@ class AmedasDailyInfo:
 
     def _download_amedas_daily(self, as_type: str, prec_no: int, block_no: int, year: int, month: int, day: int):
 
-        url = f"https://www.data.jma.go.jp/obd/stats/etrn/view/10min_{as_type}1.php?prec_no={prec_no}&block_no={block_no}&year={year}&month={month}&day={day}&view="
+        # 0 padding
+        block_no_str = str(block_no).zfill(4)
+        url = f"https://www.data.jma.go.jp/obd/stats/etrn/view/10min_{as_type}1.php?prec_no={prec_no}&block_no={block_no_str}&year={year}&month={month}&day={day}&view="
 
         response = requests.get(url)
         if response.status_code != 200:
@@ -372,4 +374,4 @@ def test():
     print(oobu_daily)
 
 
-test()
+# test()

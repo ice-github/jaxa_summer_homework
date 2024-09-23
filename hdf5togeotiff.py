@@ -35,9 +35,12 @@ class GcomHdf5:
 
     def _convert_utc_to_jst(self, utc_date: datetime) -> datetime:
 
-        dt_utc = dt_utc.replace(tzinfo=timezone.utc)
-        dt_jst = dt_utc.astimezone(timezone(timedelta(hours=9)))
+        if utc_date.tzinfo is None:
+            dt_utc = utc_date.replace(tzinfo=timezone.utc)
+        else:
+            dt_utc = utc_date.astimezone(timezone.utc)
 
+        dt_jst = dt_utc.astimezone(timezone(timedelta(hours=9)))
         return dt_jst
 
     def __init__(self, path: str) -> None:

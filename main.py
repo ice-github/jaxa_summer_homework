@@ -14,6 +14,12 @@ from hdf5togeotiff import GcomHdf5
 from qgis.core import QgsPointXY
 
 
+def gportal_username_and_password_from_env() -> tuple[str, str]:
+    username = os.environ.get("GPORTAL_USERNAME")
+    password = os.environ.get("GPORTAL_PASSWORD")
+    return username, password
+
+
 def analysis1():
 
     # get point from meteorological agency
@@ -34,7 +40,7 @@ def analysis1():
     prec_names = administrative_division_info.get_prec_names()
     aichi_prec_name = ""
     for prec_name in prec_names:
-        if "愛知県" in prec_name:
+        if "愛知" in prec_name:
             aichi_prec_name = prec_name
             break
     aichi_division = administrative_division_info.get_administrative_division(aichi_prec_name)
@@ -46,17 +52,15 @@ def analysis1():
 
     # get gcom hdf5 urls
     # https://gportal.jaxa.jp/gpr/assets/mng_upload/COMMON/upload/GCOM-C_FAQ_datasetID_jp.pdf
-    dataset_id = "10002019"  # LST
-    utc_start = datetime(2021, 8, 1)
-    utc_end = datetime(2021, 8, 2)
-    bbox = [aichi_extent.xMinimum, aichi_extent.yMaximum, aichi_extent.xMaximum, aichi_extent.yMinimum]
-    # bbox = [130, 40, 140, 30]
+    dataset_id = str("10002019")  # LST
+    utc_start = datetime(2024, 8, 1)
+    utc_end = datetime(2024, 8, 3)
+    bbox = [aichi_extent.xMinimum(), aichi_extent.yMaximum(), aichi_extent.xMaximum(), aichi_extent.yMinimum()]
     csw_wrapper = CSWWrapper()
     hdf5_urls = csw_wrapper.get_hdf5_urls(dataset_id, utc_start, utc_end, bbox)
 
     # download hdf5 files
-    username = "*****"
-    password = "*****"
+    username, password = gportal_username_and_password_from_env()
     gcom_downloader = GcomDownloader("download", "workspace", username, password)
     hdf5_file_paths = gcom_downloader.get_downloaded_file_paths(hdf5_urls)
 
@@ -117,6 +121,7 @@ def analysis1():
 
         # check if hitting all target points
         if not hit:
+            print("no station hit" + str(geo_tiff.jst_average_date))
             continue
 
         geotiff_target_points_values.append(
@@ -130,23 +135,27 @@ def analysis1():
     # get index
     def get_daily_heading_index(daily: AmedasDaily, heading_name: str) -> int:
         target_index = -1
-        for i in range(daily.table_headings):
-            heading = daily.table_headings[i]
+        for index, heading in enumerate(daily.table_headings):
             if heading_name in heading:
-                target_index = i
+                target_index = index
                 break
         return target_index
 
     # get precise value
     def get_daily_hour_minute_value(daily: AmedasDaily, heading_index: int, hour: int, minute: int) -> str:
         # 10 minute interval
-        value_index = (hour * 60 + minute) / 10
+        value_index = int((hour * 60 + minute) / 10)
 
         if value_index >= len(daily.table_lines):
             print("failed to get daily value")
             return 0.0
 
         return daily.table_lines[value_index][heading_index]
+
+    # show stations
+    for name, station in target_points:
+        print(name + ",", end="")
+    print("")
 
     # get temperatures from meteorological agency
     amedas_daily_info = AmedasDailyInfo("workspace")
@@ -160,6 +169,7 @@ def analysis1():
                 station.as_type,
                 station.prec_no,
                 station.block_no,
+                value.geotiff_date.year,
                 value.geotiff_date.month,
                 value.geotiff_date.day,
             )
@@ -178,7 +188,10 @@ def analysis1():
             lst_temperature = value.lst_values[i] * 0.02 - 273
 
             # print
-            print(temperature + ", " + lst_temperature + ", ", end="")
+            print(str(temperature) + ", " + str(lst_temperature) + ", ", end="")
 
         # newline
         print("")
+
+
+analysis1()

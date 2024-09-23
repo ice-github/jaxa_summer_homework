@@ -133,7 +133,7 @@ class GcomDownloader:
     def get_downloaded_file_paths(self, urls: list[str]) -> list[str]:
 
         file_paths: list[str] = []
-        for url in url:
+        for url in urls:
             file_paths.append(self._selenium.download_sync(self._driver, url))
 
         return file_paths

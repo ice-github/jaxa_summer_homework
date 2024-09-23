@@ -359,7 +359,14 @@ def test():
     nagoya = amedas.get_amedas_station("愛知県", "名古屋")
 
     daily = AmedasDailyInfo("workspace")
-    oobu_daily = daily.get_amedas_daily(oobu.as_type, oobu.prec_no, oobu.block_no, 2024, 8, 1)
+    oobu_daily = daily.get_amedas_daily(
+        oobu.as_type,
+        oobu.prec_no,
+        oobu.block_no,
+        2024,
+        8,
+        1,
+    )
     # nagoya_daily = daily.get_amedas_daily(nagoya.as_type, nagoya.prec_no, nagoya.block_no, 2024, 8, 1)
 
     print(oobu_daily)

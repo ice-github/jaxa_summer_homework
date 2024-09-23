@@ -102,8 +102,13 @@ class QGisWrapper:
         self._geotiff_layers.append(layer)
         return layer_number
 
-    def get_geotiff_layer_value(self, point: QgsPointXY, layer_index: int) -> float:
-        pass
+    def get_geotiff_layer_value(self, point: QgsPointXY, geotiff_layer_index: int) -> tuple[float, bool]:
+
+        if geotiff_layer_index >= len(self._geotiff_layers):
+            print("failed to refer index:" + str(geotiff_layer_index))
+            return 0.0, False
+
+        return self._geotiff_layers[geotiff_layer_index].dataProvider().sample(point, 1)
 
     def get_shp_layers_extent(self) -> QgsRectangle:
         shp_layers_len = len(self._shp_layers)
@@ -170,6 +175,15 @@ def test():
     print(wrapper.add_point_and_label(point, "minato, nagoya"))
     print(wrapper.add_geotiff(lst_path))
     print(wrapper.render_to_file("workspace/output.png", 900, 900))
+
+    value, flag = wrapper.get_geotiff_layer_value(point, 0)
+    print(flag)
+    print(f"温度 {value*0.02-273}")
+
+    point_outlier = QgsPointXY(136.8805525, 37.3890812)
+    value, flag = wrapper.get_geotiff_layer_value(point_outlier, 0)
+    print(flag)
+    print(f"温度 {value*0.02-273}")
 
 
 # test()

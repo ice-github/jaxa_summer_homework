@@ -1,4 +1,4 @@
-import os
+import os, math
 from datetime import datetime
 from dataclasses import dataclass
 
@@ -33,7 +33,9 @@ def analysis1():
             continue
         if not station.has_temperature:
             continue
-        target_points.append((name, station))
+
+        if "名古屋" in name:
+            target_points.append((name, station))
 
     # get aichi shp
     administrative_division_info = AdministrativeDivisionInfo("download", "workspace")
@@ -53,9 +55,14 @@ def analysis1():
     # get gcom hdf5 urls
     # https://gportal.jaxa.jp/gpr/assets/mng_upload/COMMON/upload/GCOM-C_FAQ_datasetID_jp.pdf
     dataset_id = str("10002019")  # LST
-    utc_start = datetime(2024, 8, 1)
-    utc_end = datetime(2024, 8, 3)
-    bbox = [aichi_extent.xMinimum(), aichi_extent.yMaximum(), aichi_extent.xMaximum(), aichi_extent.yMinimum()]
+    utc_start = datetime(2024, 1, 1)
+    utc_end = datetime(2024, 2, 1)
+    bbox = [
+        math.floor(aichi_extent.xMinimum()),
+        math.floor(aichi_extent.yMinimum()),
+        math.ceil(aichi_extent.xMaximum()),
+        math.ceil(aichi_extent.yMaximum()),
+    ]
     csw_wrapper = CSWWrapper()
     hdf5_urls = csw_wrapper.get_hdf5_urls(dataset_id, utc_start, utc_end, bbox)
 
@@ -99,6 +106,31 @@ def analysis1():
         qa_flag_values: list[float]
         geotiff_date: datetime
 
+    def parse_lst_qa_flag(value: float) -> dict[str, str]:
+
+        int_value = int(value) & 0xFFFF
+        bits = [(int_value >> i) & 1 for i in range(16)]
+
+        flags = {}
+        flags["no input data"] = "yes" if bits[0] else "no"
+        flags["land(0)/water(1) flag"] = "water" if bits[1] else "land"
+        flags["Spare"] = "yes" if bits[2] else "no"
+        flags["no CLFG"] = "yes" if bits[3] else "no"
+        flags["no VNR/SWR"] = "yes" if bits[4] else "no"
+        flags["Snow"] = "yes" if bits[5] else "no"
+        flags["Sensor zenith angle > 33"] = "yes" if bits[6] else "no"
+        flags["Sensor zenith angle > 43"] = "yes" if bits[7] else "no"
+        flags["TR1 < 0.6"] = "yes" if bits[8] else "no"
+        flags["RES > 1[K] (CNVERR>1.0)&&(CNVERR<= 2.0)"] = "yes" if bits[9] else "no"
+        flags["RES > 2[K] CNVERR> 2.0"] = "yes" if bits[10] else "no"
+        flags["Probably Cloudy"] = "yes" if bits[11] else "no"
+        flags["Cloudy"] = "yes" if bits[12] else "no"
+        flags["TS out of range"] = "yes" if bits[13] else "no"
+        # flags["land/water flag"] = "water" if bits[14] else "land"
+        # flags["no input data"] = "no data" if bits[15] else "valid data"
+
+        return flags
+
     # apply to qgis
     geotiff_target_points_values: list[GeoTiffTargetPointsValue] = []
     for geo_tiff in geo_tiffs:
@@ -121,7 +153,7 @@ def analysis1():
 
         # check if hitting all target points
         if not hit:
-            print("no station hit" + str(geo_tiff.jst_average_date))
+            print("no station hit: " + str(geo_tiff.jst_average_date))
             continue
 
         geotiff_target_points_values.append(
@@ -161,7 +193,10 @@ def analysis1():
     amedas_daily_info = AmedasDailyInfo("workspace")
     for value in geotiff_target_points_values:
 
-        print(value.geotiff_date, end="")
+        if value.geotiff_date.hour > 19:
+            continue
+
+        print(value.geotiff_date.strftime("%Y-%m-%d %H:%M:%S") + ", ", end="")
 
         for i in range(len(target_points)):
             name, station = target_points[i]
@@ -182,13 +217,37 @@ def analysis1():
                 value.geotiff_date.hour,
                 value.geotiff_date.minute,
             )
-            temperature = float(temperature_str)
+
+            # str to float
+            try:
+                temperature = float(temperature_str)
+            except (ValueError, TypeError):
+                temperature = 10000.0
 
             # compare values
             lst_temperature = value.lst_values[i] * 0.02 - 273
+            lst_qa_flag = value.qa_flag_values[i]
+
+            # parse flag
+            flag_info = parse_lst_qa_flag(lst_qa_flag)
+
+            if flag_info["no input data"] == "yes" or flag_info["Cloudy"] == "yes":
+                continue
+            if temperature > 100:
+                continue
 
             # print
             print(str(temperature) + ", " + str(lst_temperature) + ", ", end="")
+
+            if flag_info["no input data"] == "yes":
+                print("(no data), ", end="")
+
+            if flag_info["Cloudy"] == "yes":
+                print("(Cloudy), ", end="")
+
+            # print(str(int(lst_qa_flag)))
+            # for key, val in flag_info.items():
+            #     print(f"  {key}: {val}")
 
         # newline
         print("")

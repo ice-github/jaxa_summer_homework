@@ -40,26 +40,41 @@ class CSWWrapper:
         dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
         return dt
 
+    def _split_intervals(self, start: datetime, end: datetime, days: int) -> list[tuple[datetime, datetime]]:
+        intervals = []
+        delta = timedelta(days=days)
+        current = start
+        while current < end:
+            next_end = min(current + delta, end)
+            intervals.append((current, next_end))
+            current = next_end
+        return intervals
+
     def get_hdf5_urls(self, dataset_id: str, utc_start: datetime, utc_end: datetime, bbox: list[float]) -> list[str]:
 
         if len(bbox) != 4:
             print("error: bbox is [left-down lon, left-down, lat, right-up lon, right-up lat]")
             return ""
 
-        # query
-        start_str = self._get_string_from_date(utc_start)
-        end_str = self._get_string_from_date(utc_end)
-        bbox_str = ",".join(str(v) for v in bbox)
-        url = self._create_query_url(dataset_id, start_str, end_str, bbox_str)
+        # intervals
+        intervals = self._split_intervals(utc_start, utc_end, 3)
 
-        # request
-        data = self._fetch_data(url)
-
-        # parse
+        # query by intervals
         h5_urls: list[str] = []
-        for feature in data["features"]:
-            h5_url = feature["properties"]["product"]["fileName"]
-            h5_urls.append(h5_url)
+        for start, end in intervals:
+            # query
+            start_str = self._get_string_from_date(start)
+            end_str = self._get_string_from_date(end)
+            bbox_str = ",".join(str(v) for v in bbox)
+            url = self._create_query_url(dataset_id, start_str, end_str, bbox_str)
+
+            # request
+            data = self._fetch_data(url)
+
+            # parse
+            for feature in data["features"]:
+                h5_url = feature["properties"]["product"]["fileName"]
+                h5_urls.append(h5_url)
 
         return h5_urls
 
